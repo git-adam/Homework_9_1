@@ -9,6 +9,9 @@
 
 @using (Html.BeginForm("InvoicePosition", "Home"))
 {
+    @Html.AntiForgeryToken()
+    @Html.ValidationSummary()
+
     if (Model.InvoicePosition.Id == 0)
     {
         <p class="alert alert-info mt-4 mb-4">
@@ -24,6 +27,7 @@
         @Html.LabelFor(x => x.InvoicePosition.Lp)
         @Html.TextBoxFor(x => x.InvoicePosition.Lp,
         new { @class = "form-control", autofocus = "autofocus" })
+        @Html.ValidationMessageFor(x => x.InvoicePosition.Lp)
     </div>
 
     <div class="form-group">
@@ -32,12 +36,14 @@
             new SelectList(Model.Products, "Id", "Name"),
             "-- Wybierz produkt --",
             new { @class = "form-control" })
+        @Html.ValidationMessageFor(x => x.InvoicePosition.ProductId)
     </div>
 
     <div class="form-group">
         @Html.LabelFor(x => x.InvoicePosition.Quantity)
         @Html.TextBoxFor(x => x.InvoicePosition.Quantity,
         new { @class = "form-control" })
+        @Html.ValidationMessageFor(x => x.InvoicePosition.Quantity)
     </div>
 
     if (Model.InvoicePosition.Id != 0)
@@ -53,4 +59,19 @@
         Zapisz
     </button>
 
+}
+
+@section Scripts
+{
+    <script type="text/javascript">
+
+        $(document).ready(function () {
+
+            $.validator.methods.number = function (value, element) {
+                return this.optional(element) || /^-?(?:\d+|\d{1,3}(?:[\s\.,]\d{3})+)(?:[\.,]\d+)?$/.test(value);
+            }
+
+        });
+
+    </script>
 }

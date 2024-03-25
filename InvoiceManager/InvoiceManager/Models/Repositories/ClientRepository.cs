@@ -10,7 +10,10 @@ namespace InvoiceManager.Models.Repositories
     {
         public List<Client> GetClients(string userId)
         {
-            throw new NotImplementedException();
+            using (var context = new ApplicationDbContext())
+            {
+                return context.Clients.Where(x => x.UserId == userId).ToList();
+            }
         }
     }
 }

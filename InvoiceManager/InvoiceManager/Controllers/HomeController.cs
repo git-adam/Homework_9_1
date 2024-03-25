@@ -15,104 +15,20 @@ namespace InvoiceManager.Controllers
     {
         private InvoiceRepository _invoiceRepository = new InvoiceRepository();
         private ClientRepository _clientRepository = new ClientRepository();
+        private ProductRepository _productRepository = new ProductRepository();
+
+        //[NonAction] - jesli nie chcemy, aby można było wywołać metodę z pozycji przeglądarki
         public ActionResult Index()
         {
             var userId = User.Identity.GetUserId();
 
             var invoices = _invoiceRepository.GetInvoices(userId);
 
-            //var invoices = new List<Invoice>()
-            //{
-            //    new Invoice
-            //    {
-            //        Id = 1,
-            //        Title = "Fa/01/2024",
-            //        CreatedDate = DateTime.Now,
-            //        PaymentDate = DateTime.Now,
-            //        Value = 999,
-            //        Client = new Client{ Name = "Klient 1"}
-            //    },
-            //    new Invoice
-            //    {
-            //        Id = 2,
-            //        Title = "Fa/02/2024",
-            //        CreatedDate = DateTime.Now,
-            //        PaymentDate = DateTime.Now,
-            //        Value = 91199,
-            //        Client = new Client{ Name = "Klient 2"}
-            //    }
-
-            //};
-
             return View(invoices);
         }
 
         public ActionResult Invoice(int id = 0)
         {
-            //EditInvoiceViewModel vm = null;
-
-            //if (id == 0)
-            //{
-            //    vm = new EditInvoiceViewModel()
-            //    {
-            //        Clients = new List<Client>()
-            //    {
-            //        new Client { Id = 1, Name = "Klient 1" }
-            //    },
-            //        MethodOfPayments = new List<MethodOfPayment>
-            //    {
-            //        new MethodOfPayment { Id = 1, Name = "Przelew" }
-            //    },
-            //        Heading = "Edycja faktury",
-            //        Invoice = new Invoice()
-            //    };
-            //}
-            //else
-            //{
-            //    vm = new EditInvoiceViewModel()
-            //    {
-            //        Clients = new List<Client>()
-            //        {
-            //            new Client { Id = 1, Name = "Klient 1" }
-            //        },
-            //        MethodOfPayments = new List<MethodOfPayment>
-            //        {
-            //            new MethodOfPayment { Id = 1, Name = "Przelew" }
-            //        },
-            //        Heading = "Edycja faktury",
-            //        Invoice = new Invoice()
-            //        {
-            //            ClientId = 1,
-            //            Comments = "Uwagi",
-            //            CreatedDate = DateTime.Now,
-            //            PaymentDate = DateTime.Now,
-            //            MethodOfPaymentId = 1,
-            //            Id = 1,
-            //            Value = 100,
-            //            Title = "FA/01/2024",
-            //            InvoicePositions = new List<InvoicePosition>()
-            //            {
-            //                new InvoicePosition()
-            //                {
-            //                    Id = 1,
-            //                    Lp = 1,
-            //                    Product = new Product(){ Name = "Produkt"},
-            //                    Quantity = 2,
-            //                    Value = 50,
-            //                },
-            //                new InvoicePosition()
-            //                {
-            //                    Id = 2,
-            //                    Lp = 2,
-            //                    Product = new Product(){ Name = "Produkt 32"},
-            //                    Quantity = 223,
-            //                    Value = 501,
-            //                },
-            //            }
-            //        }
-            //    };
-            //}
-
             var userId = User.Identity.GetUserId();
 
             var invoice = id == 0 ?
@@ -145,36 +61,124 @@ namespace InvoiceManager.Controllers
             };
         }
 
-        public ActionResult InvoicePosition(int invoiceId = 0, int invoicePositionId = 0)
+        public ActionResult InvoicePosition(int invoiceId, int invoicePositionId = 0)
         {
+            var userId = User.Identity.GetUserId();
 
-            EditInvoicePositionViewModel vm = null;
+            var invoicePosition = invoicePositionId == 0 ?
+                GetNewPosition(invoiceId, invoicePositionId) :
+                _invoiceRepository.GetInvoicePosition(invoicePositionId, userId);
 
-            if (invoicePositionId == 0)
-            {
-                vm = new EditInvoicePositionViewModel()
-                {
-                    InvoicePosition = new InvoicePosition(),
-                    Heading = "Dodawanie nowej pozycji",
-                    Products = new List<Product>()
-                    { new Product { Id = 1, Name = "Produkt 1" } }
-                };
-            }
-            else
-            {
-                vm = new EditInvoicePositionViewModel()
-                {
-                    InvoicePosition = new InvoicePosition()
-                    {
-                        Lp = 11, Value = 100, Quantity = 2, ProductId = 1 
-                    },
-                    Heading = "Edytowanie pozycji",
-                    Products = new List<Product>()
-                    { new Product { Id = 1, Name = "Produkt 1" } }
-                };
-            }
+            var vm = PrepareInvoicePositionVm(invoicePosition);
 
             return View(vm);
+        }
+
+        private EditInvoicePositionViewModel PrepareInvoicePositionVm(InvoicePosition invoicePosition)
+        {
+            return new EditInvoicePositionViewModel()
+            {
+                InvoicePosition = invoicePosition,
+                Heading = invoicePosition.Id == 0 ? "Dodawanie nowej pozycji" : "Pozycja",
+                Products = _productRepository.GetProducts()
+            };
+        }
+
+        private InvoicePosition GetNewPosition(int invoiceId, int invoicePositionId)
+        {
+            return new InvoicePosition
+            {
+                InvoiceId = invoiceId,
+                Id = invoicePositionId
+            };
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public ActionResult Invoice(Invoice invoice)
+        {
+            var userId = User.Identity.GetUserId();
+            invoice.UserId = userId;
+
+            if (!ModelState.IsValid)
+            {
+                var vm = PrepareInvoiceVm(invoice, userId);
+                return View("Invoice", vm);
+            }
+
+            if (invoice.Id == 0)
+                _invoiceRepository.Add(invoice);
+            else
+                _invoiceRepository.Update(invoice);
+
+            return RedirectToAction("Index");
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public ActionResult InvoicePosition(InvoicePosition invoicePosition)
+        {
+            var userId = User.Identity.GetUserId();
+
+            var product = _productRepository
+                .GetProduct(invoicePosition.ProductId);
+
+            if (!ModelState.IsValid)
+            {
+                var vm = PrepareInvoicePositionVm(invoicePosition);
+                return View("InvoicePosition", vm);
+            }
+
+            invoicePosition.Value = invoicePosition.Quantity * product.Value;
+
+            if (invoicePosition.Id == 0)
+                _invoiceRepository.AddPosition(invoicePosition, userId);
+            else
+                _invoiceRepository.UpdatePosition(invoicePosition, userId);
+
+            _invoiceRepository
+                .UpdateInvoiceValue(invoicePosition.InvoiceId, userId);
+
+            return RedirectToAction("Invoice",
+                new { id = invoicePosition.InvoiceId });
+        }
+
+        [HttpPost]
+        public ActionResult Delete(int id)
+        {
+            try
+            {
+                var userId = User.Identity.GetUserId();
+                _invoiceRepository.Delete(id, userId);
+            }
+            catch (Exception exception)
+            {
+                //logowanie
+                return Json(new { Success = false, Message = exception.Message });
+            }
+
+            return Json(new { Success = true });
+        }
+
+        [HttpPost]
+        public ActionResult DeletePosition(int id, int invoiceId)
+        {
+            var invoiceValue = 0m;
+
+            try
+            {
+                var userId = User.Identity.GetUserId();
+                _invoiceRepository.DeletePosition(id, userId);
+                invoiceValue = _invoiceRepository
+                    .UpdateInvoiceValue(invoiceId, userId);
+            }
+            catch (Exception exception)
+            {
+                //logowanie
+                return Json(new { Success = false, Message = exception.Message });
+            }
+
+            return Json(new { Success = true, InvoiceValue = invoiceValue });
         }
 
         [AllowAnonymous]
@@ -182,13 +186,74 @@ namespace InvoiceManager.Controllers
         {
             ViewBag.Message = "Your application description page.";
 
+            var valSession = GetSession();
+            valSession++;
+            UpdateSession(valSession);
+            ViewBag.ValSession = valSession;
+
+            var valCookie = GetCookie();
+            valCookie++;
+            UpdateCookie(valCookie);
+            ViewBag.ValCookie = valCookie;
+
+            var valCache = GetCache();
+            valCache++;
+            UpdateCache(valCache);
+            ViewBag.ValCache = valCache;
+
             return View();
         }
 
+        private void UpdateSession(int i)
+        {
+            Session["nr"] = i;
+        }
+
+        private int GetSession()
+        {
+            if (Session["nr"] != null)
+                return (int)Session["nr"];
+            return 0;
+        }
+
+        private void UpdateCookie(int i)
+        {
+            var cookie = new HttpCookie("nr", i.ToString());
+            cookie.Expires = DateTime.Now.AddDays(365);
+            Response.SetCookie(cookie);
+        }
+
+        private int GetCookie()
+        {
+            if (Request.Cookies["nr"] != null)
+                return int.Parse(Request.Cookies["nr"].Value);
+            return 0;
+        }
+
+        private void UpdateCache(int i)
+        {
+            HttpRuntime.Cache["nr"] = i;
+        }
+
+        private int GetCache()
+        {
+            if (HttpRuntime.Cache["nr"] != null)
+                return (int)HttpRuntime.Cache["nr"];
+            return 0;
+        }
+
+
+        private static int number = 0; //pole statyczne wspolne dla wielu użytkownikow
+        private int number1 = 0;
         [AllowAnonymous]
+        [OutputCache(Duration = 10)]
         public ActionResult Contact()
         {
-            ViewBag.Message = "Your contact page.";
+            number++;
+            number1++;
+            ViewBag.Message = "Your contact page. => " + number + "=>" + number1;
+
+            throw new Exception("blad11111");
 
             return View();
         }
